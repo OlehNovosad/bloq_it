@@ -95,8 +95,7 @@ void qr_handle_init(void)
 {
     if (g_ctx.state != STATE_BOOT)
     {
-        printf("ERROR: Already initialized\n");
-        LOG_ERR("INIT called in invalid state");
+        LOG_ERR("Already initialized");
         fflush(stdout);
         return;
     }
@@ -122,7 +121,7 @@ void qr_handle_init(void)
 
     if (open_serial() != RESULT_OK)
     {
-        printf("ERROR: serial open failed\n");
+        LOG_ERR("serial open failed");
         return;
     }
 
@@ -133,14 +132,13 @@ void qr_handle_init(void)
 void qr_handle_ping(void)
 {
     printf("PONG\n");
-    fflush(stdout);
 }
 
 void qr_handle_start(void)
 {
     if (g_ctx.state != STATE_READY)
     {
-        printf("ERROR: invalid state\n");
+        LOG_ERR("invalid state");
         return;
     }
 
@@ -177,20 +175,25 @@ void qr_handle_start(void)
                 // Trim trailing newline if present
                 if (buf[n - 1] == '\r' || buf[n - 1] == '\n') buf[n - 1] = '\0';
                 printf("{\"qr-data\": {\"code\":\"%s\",\"ts\":%ld}}\n", buf, (long)time(NULL));
+                fflush(stdout);
             }
             else
             {
-                printf("ERROR: read error\n");
+                LOG_ERR("read error\n");
             }
         }
     }
     else if (ret == 0)
     {
         printf("{\"qr-data\": {\"code\":\"TIMEOUT\",\"ts\":%ld}}\n", (long)time(NULL));
+        fflush(stdout);
     }
     else
     {
-        if (errno != EINTR) printf("ERROR: select failed\n");
+        if (errno != EINTR)
+        {
+            LOG_ERR("select failed\n");
+        }
     }
 
     g_ctx.state = STATE_READY;

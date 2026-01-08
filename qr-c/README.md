@@ -32,7 +32,7 @@ docker run -it --rm \
         mkdir -p logs && chmod 777 logs && \
         socat -d -d PTY,link=/dev/ttyS1,raw,echo=0 TCP:host.docker.internal:9999 & \
         sleep 2 && \
-        /app/qr_serial"
+        /app/qr_serial | python3 process.py"
 ```
 
 ---
