@@ -1,11 +1,18 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <termios.h>
 #include <unistd.h>
-#include <time.h>
 #include <errno.h>
+
+#ifdef __linux__
+#include <sys/select.h>
+#include <sys/time.h>
+#include <time.h>
+#else
+#include <time.h>
+#endif
+
 
 #include "qr.h"
 
