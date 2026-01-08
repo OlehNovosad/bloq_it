@@ -1,0 +1,203 @@
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <termios.h>
+#include <unistd.h>
+#include <time.h>
+#include <errno.h>
+
+#include "qr.h"
+
+/* ---------------------------------------------------------
+ * STATIC STATE
+ * --------------------------------------------------------- */
+
+static struct
+{
+    const char* port;
+    int baud;
+    int timeout_ms;
+    int serial_fd;
+    int stop_pipe[2];
+    state_t state;
+} g_ctx = {.serial_fd = -1, .stop_pipe = {-1, -1}, .state = STATE_BOOT};
+
+/* ---------------------------------------------------------
+ * PRIVATE FUNCTIONS
+ * --------------------------------------------------------- */
+
+static speed_t get_baud_rate(int baud)
+{
+    switch (baud)
+    {
+    case 9600: return B9600;
+    case 19200: return B19200;
+    case 38400: return B38400;
+    case 57600: return B57600;
+    case 115200: return B115200;
+    default: return B0;
+    }
+}
+
+static result_t open_serial()
+{
+    g_ctx.serial_fd = open(g_ctx.port, O_RDWR | O_NOCTTY | O_SYNC);
+    ASSERT_LOG(g_ctx.serial_fd >= 0, "Can't open serial port");
+
+    struct termios tty;
+    if (tcgetattr(g_ctx.serial_fd, &tty) != 0)
+    {
+        close(g_ctx.serial_fd);
+        ASSERT_LOG(0, "tcgetattr failed");
+    }
+
+    speed_t speed = get_baud_rate(g_ctx.baud);
+    if (speed == B0)
+    {
+        close(g_ctx.serial_fd);
+        ASSERT_LOG(0, "Unsupported baudrate");
+    }
+
+    cfsetospeed(&tty, speed);
+    cfsetispeed(&tty, speed);
+
+    tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;
+    tty.c_cflag |= (CLOCAL | CREAD);
+    tty.c_cflag &= ~(PARENB | CSTOPB);
+    tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY | IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL);
+    tty.c_oflag &= ~OPOST;
+
+    if (tcsetattr(g_ctx.serial_fd, TCSANOW, &tty) != 0)
+    {
+        close(g_ctx.serial_fd);
+        ASSERT_LOG(0, "tcsetattr failed");
+    }
+
+    tcflush(g_ctx.serial_fd, TCIOFLUSH);
+    LOG_INFO("Serial port opened");
+    return RESULT_OK;
+}
+
+/* ---------------------------------------------------------
+ * COMMANDS HANDLER
+ * --------------------------------------------------------- */
+
+void qr_handle_init(void)
+{
+    if (g_ctx.state != STATE_BOOT)
+    {
+        printf("ERROR: Already initialized\n");
+        LOG_ERR("INIT called in invalid state");
+        fflush(stdout);
+        return;
+    }
+
+    g_ctx.port = getenv("SERIAL_PORT");
+    const char* baud_env = getenv("SERIAL_BAUD");
+    const char* timeout_env = getenv("READ_TIMEOUT_MS");
+
+    VERIFY_ENV(g_ctx.port != NULL, "SERIAL_PORT");
+    VERIFY_ENV(baud_env != NULL, "SERIAL_BAUD");
+    VERIFY_ENV(timeout_env != NULL, "READ_TIMEOUT_MS");
+
+    g_ctx.baud = atoi(baud_env);
+    g_ctx.timeout_ms = atoi(timeout_env);
+
+    // Setup Communication Pipes for STOP COMMAND
+    if (pipe(g_ctx.stop_pipe) == -1)
+    {
+        perror("pipe");
+        return;
+    }
+    fcntl(g_ctx.stop_pipe[0], F_SETFL, O_NONBLOCK);
+
+    if (open_serial() != RESULT_OK)
+    {
+        printf("ERROR: serial open failed\n");
+        return;
+    }
+
+    g_ctx.state = STATE_READY;
+    printf("OK\n");
+}
+
+void qr_handle_ping(void)
+{
+    printf("PONG\n");
+    fflush(stdout);
+}
+
+void qr_handle_start(void)
+{
+    if (g_ctx.state != STATE_READY)
+    {
+        printf("ERROR: invalid state\n");
+        return;
+    }
+
+    g_ctx.state = STATE_READING;
+    LOG_INFO("Starting QR read scan");
+
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(g_ctx.serial_fd, &rfds);
+    FD_SET(g_ctx.stop_pipe[0], &rfds);
+
+    int max_fd = (g_ctx.serial_fd > g_ctx.stop_pipe[0]) ? g_ctx.serial_fd : g_ctx.stop_pipe[0];
+
+    struct timeval tv;
+    tv.tv_sec = g_ctx.timeout_ms / 1000;
+    tv.tv_usec = (g_ctx.timeout_ms % 1000) * 1000;
+
+    int ret = select(max_fd + 1, &rfds, NULL, NULL, &tv);
+
+    if (ret > 0)
+    {
+        if (FD_ISSET(g_ctx.stop_pipe[0], &rfds))
+        {
+            char dummy;
+            while (read(g_ctx.stop_pipe[0], &dummy, 1) > 0); // Drain pipe
+            LOG_INFO("Scan aborted by STOP");
+        }
+        else if (FD_ISSET(g_ctx.serial_fd, &rfds))
+        {
+            char buf[SERIAL_BUF_SIZE] = {0};
+            ssize_t n = read(g_ctx.serial_fd, buf, sizeof(buf) - 1);
+            if (n > 0)
+            {
+                // Trim trailing newline if present
+                if (buf[n - 1] == '\r' || buf[n - 1] == '\n') buf[n - 1] = '\0';
+                printf("{\"qr-data\": {\"code\":\"%s\",\"ts\":%ld}}\n", buf, (long)time(NULL));
+            }
+            else
+            {
+                printf("ERROR: read error\n");
+            }
+        }
+    }
+    else if (ret == 0)
+    {
+        printf("{\"qr-data\": {\"code\":\"TIMEOUT\",\"ts\":%ld}}\n", (long)time(NULL));
+    }
+    else
+    {
+        if (errno != EINTR) printf("ERROR: select failed\n");
+    }
+
+    g_ctx.state = STATE_READY;
+}
+
+void qr_handle_stop(void)
+{
+    if (g_ctx.state == STATE_READING)
+    {
+        if (write(g_ctx.stop_pipe[1], "!", 1) == -1)
+        {
+            LOG_ERR("Failed to write to stop pipe");
+        }
+    }
+    printf("OK\n");
+    fflush(stdout);
+}

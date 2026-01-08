@@ -1,5 +1,19 @@
-cmake_minimum_required(VERSION 3.10.0)
-project(qr-c VERSION 0.1.0 LANGUAGES C)
+cmake_minimum_required(VERSION 3.10)
+project(qr_serial C)
 
-add_executable(qr-c src/main.c)
+add_executable(qr_serial
+        src/main.c
+        src/qr.c
+        src/logging.c
+)
 
+target_include_directories(qr_serial
+        PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/inc
+)
+
+target_compile_options(qr_serial
+        PRIVATE
+        -Wall
+        -Wextra
+)
