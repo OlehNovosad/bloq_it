@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 /* ---------------------------------------------------------
@@ -28,12 +29,50 @@ static void log_msg(const char *level, const char *msg) {
     fclose(flog);
 }
 
+static void trim(char *str) {
+    str[strcspn(str, "\r\n")] = '\0';
+}
+
+/* ---------------------------------------------------------
+ * Commands handler
+ * --------------------------------------------------------- */
+
+void init_handle(void) {}
+
+void ping_handle(void) {}
+
+void start_handle(void) {}
+
+void stop_handle(void) {}
+
 /* ---------------------------------------------------------
  * MAIN ENTRY POINT
  * --------------------------------------------------------- */
 
 int main(void) {
-    log_msg("DEBUG", "Hello world!");
+    char cmd[CMD_BUF_SIZE];
+
+    log_msg("INFO", "QR started");
+
+    while (fgets(cmd, sizeof(cmd), stdin)) {
+        trim(cmd);
+
+        if (strcmp(cmd, "INIT") == 0) {
+            log_msg("DEBUG", "CMD: INIT invoked");
+            init_handle();
+        } else if (strcmp(cmd, "PING") == 0) {
+            log_msg("DEBUG", "CMD: PING invoked");
+            ping_handle();
+        } else if (strcmp(cmd, "START") == 0) {
+            log_msg("DEBUG", "CMD: START invoked");
+            start_handle();
+        } else if (strcmp(cmd, "STOP") == 0) {
+            log_msg("DEBUG", "CMD: STOP invoked");
+            stop_handle();
+        } else {
+            log_msg("ERROR", "Invalid command");
+        }
+    }
 
     return 0;
 }
