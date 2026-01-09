@@ -8,6 +8,10 @@ logging.basicConfig(
 
 
 class MQTTClientManager:
+    TOPIC_EVENTS = "olno/events"
+    TOPIC_COMMANDS = "olno/commands"
+    TOPIC_DEV_CMD = "olno/dev_cmd"
+
     def __init__(self, broker: str = "test.mosquitto.org", port: int = 1883):
         self.broker = broker
         self.port = port
@@ -25,8 +29,8 @@ class MQTTClientManager:
         if rc == 0:
             logging.info("Successfully connected to broker")
 
-            client.subscribe("olno/events")
-            client.subscribe("olno/commands")
+            client.subscribe(MQTTClientManager.TOPIC_EVENTS)
+            client.subscribe(MQTTClientManager.TOPIC_COMMANDS)
         else:
             logging.error(f"Connection failed with code {rc}")
 
@@ -34,6 +38,8 @@ class MQTTClientManager:
         logging.warning(f"Disconnected from broker (RC: {rc}). Retrying...")
 
     def on_message(self, client, userdata, msg):
+        if msg.topic == MQTTClientManager.TOPIC_COMMANDS:
+            self.client.publish(MQTTClientManager.TOPIC_DEV_CMD, msg.payload)
         print(f"Received `{msg.payload.decode()}` from `{msg.topic}` topic")
 
     def run(self):

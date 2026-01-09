@@ -132,6 +132,7 @@ void qr_handle_init(void)
 void qr_handle_ping(void)
 {
     printf("PONG\n");
+    fflush(stdout);
 }
 
 void qr_handle_start(void)
