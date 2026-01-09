@@ -73,6 +73,7 @@ def process_line(line: str) -> str:
         logging.info(f"JSON Received - Code: {qr_data.get('code')}")
         return json.dumps(data)
     except (json.JSONDecodeError, TypeError):
+        logging.info(f"Non JSON Received - {line}")
         return line
 
 
