@@ -8,7 +8,40 @@
  * PRIVATE FUNCTIONS
  * --------------------------------------------------------- */
 
+typedef enum
+{
+    INIT = 0,
+    PING,
+    START,
+    STOP,
+    UNKNOWN,
+} command_t;
+
 static void trim(char* str) { str[strcspn(str, "\r\n")] = '\0'; }
+
+static command_t parse_command(const char* cmd)
+{
+    if (strcmp(cmd, "INIT") == 0)
+    {
+        return INIT;
+    }
+    else if (strcmp(cmd, "PING") == 0)
+    {
+        return PING;
+    }
+    else if (strcmp(cmd, "START") == 0)
+    {
+        return START;
+    }
+    else if (strcmp(cmd, "STOP") == 0)
+    {
+        return STOP;
+    }
+    else
+    {
+        return UNKNOWN;
+    }
+}
 
 /* ---------------------------------------------------------
  * MAIN ENTRY POINT
@@ -24,29 +57,27 @@ int main(void)
     {
         trim(cmd);
 
-        if (strcmp(cmd, "INIT") == 0)
+        switch (parse_command(cmd))
         {
+        case INIT:
             LOG_INFO("CMD: INIT invoked");
             qr_handle_init();
-        }
-        else if (strcmp(cmd, "PING") == 0)
-        {
+            break;
+        case PING:
             LOG_INFO("CMD: PING invoked");
             qr_handle_ping();
-        }
-        else if (strcmp(cmd, "START") == 0)
-        {
+            break;
+        case START:
             LOG_INFO("CMD: START invoked");
             qr_handle_start();
-        }
-        else if (strcmp(cmd, "STOP") == 0)
-        {
+            break;
+        case STOP:
             LOG_INFO("CMD: STOP invoked");
             qr_handle_stop();
-        }
-        else
-        {
+            break;
+        default:
             LOG_ERR("Invalid command");
+            break;
         }
     }
 
