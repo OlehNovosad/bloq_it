@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  qr-c:
+    container_name: qr-c
+    image: my_qr
+    build:
+      context: ./qr-c
+      dockerfile: Dockerfile
+    network_mode: host
+    user: root
+    restart: unless-stopped
+    environment:
+      SERIAL_PORT: /dev/ttyQR1
+      SERIAL_BAUD: "115200"
+      READ_TIMEOUT_MS: "10000"
+    entrypoint: /bin/sh
+    command: >-
+      -c "apk add --no-cache socat &&
+      mkdir -p /app/logs && chmod 777 /app/logs &&
+      socat -d -d pty,raw,echo=0,link=/dev/ttyS1 pty,raw,echo=0,link=/dev/ttyS2 &
+      socat -d -d pty,raw,echo=0,link=/dev/ttyQR1 pty,raw,echo=0,link=/dev/ttyQR2 &
+      sleep 2 &&
+      chmod 666 /dev/ttyS1 /dev/ttyS2 /dev/ttyQR1 /dev/ttyQR2 &&
+      /app/qr_serial < /dev/ttyS1 | python3 process.py"
+
+  gateway:
+    container_name: gateway
+    image: my_gateway
+    build:
+      context: ./gateway-py
+      dockerfile: Dockerfile
+    network_mode: host
+    restart: unless-stopped
+    depends_on:
+      - qr-c
