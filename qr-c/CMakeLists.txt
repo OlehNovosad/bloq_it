@@ -3,7 +3,7 @@ project(qr_serial C)
 
 add_executable(qr_serial
         src/main.c
-        src/qr.c
+        src/qr_core.c
         src/logging.c
 )
 
