@@ -28,7 +28,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -r /app/requirements.txt
 
 ENV SERIAL_PORT=/dev/ttyS1
 ENV SERIAL_BAUD=9600
-ENV READ_TIMEOUT_MS=5000
+ENV READ_TIMEOUT_MS=10000
 
 ENV PYTHONUNBUFFERED=1
 

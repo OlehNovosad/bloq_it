@@ -5,6 +5,7 @@ import threading
 import time
 import ssl
 from pathlib import Path
+from time import sleep
 
 import serial
 from paho.mqtt import client as mqtt_client
@@ -120,6 +121,15 @@ class MQTTClientManager:
             self.serial_conn.flush()
 
             if command == "START":
+                """
+                Simulate a QR scan after a delay when START command is received.
+                To be able to send STOP command before the simulated scan,
+                the simulation is run in a separate thread.
+                
+                Ensure that READ_TIMEOUT_MS from env is longer than this delay. 
+                Recommended to set READ_TIMEOUT_MS to at least 10000 ms.
+                """
+                sleep(5)
                 self.__simulate_qr_scan("SIMULATED_QR_12345")
 
     def __simulate_qr_scan(self, data: str, delay: float = 0.5):
