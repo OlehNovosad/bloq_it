@@ -5,32 +5,46 @@ services:
     container_name: qr-c
     image: my_qr
     build:
-      context: ./qr-c
+      context: ./qr-c       # Build context for the QR C application
       dockerfile: Dockerfile
-    network_mode: host
-    user: root
-    restart: unless-stopped
+    network_mode: host      # Share host network for direct serial access
+    user: root              # Run as root to access /dev/tty* devices
+    restart: unless-stopped # Automatically restart unless explicitly stopped
     environment:
-      SERIAL_PORT: /dev/ttyQR1
-      SERIAL_BAUD: "115200"
-      READ_TIMEOUT_MS: "10000"
+      SERIAL_PORT: /dev/ttyQR1       # Serial port used by QR app
+      SERIAL_BAUD: "115200"          # Baud rate for serial communication
+      READ_TIMEOUT_MS: "10000"       # Read timeout in milliseconds
     entrypoint: /bin/sh
-    command: >-
-      -c "apk add --no-cache socat &&
-      mkdir -p /app/logs && chmod 777 /app/logs &&
+    command: |
+      # Install socat for virtual serial ports
+      apk add --no-cache socat
+      
+      # Create logs directory with full permissions
+      mkdir -p /app/logs
+      chmod 777 /app/logs
+      
+      # Create fake serial port pairs
       socat -d -d pty,raw,echo=0,link=/dev/ttyS1 pty,raw,echo=0,link=/dev/ttyS2 &
       socat -d -d pty,raw,echo=0,link=/dev/ttyQR1 pty,raw,echo=0,link=/dev/ttyQR2 &
-      sleep 2 &&
-      chmod 666 /dev/ttyS1 /dev/ttyS2 /dev/ttyQR1 /dev/ttyQR2 &&
-      /app/qr_serial < /dev/ttyS1 | python3 process.py"
+      
+      # Give socat time to initialize
+      sleep 2
+      
+      # Ensure read/write permissions for serial devices
+      chmod 666 /dev/ttyS1 /dev/ttyS2 /dev/ttyQR1 /dev/ttyQR2
+      
+      # Start QR C application and pipe output to Python processor
+      /app/qr_serial < /dev/ttyS1 | python3 process.py
+
 
   gateway:
     container_name: gateway
     image: my_gateway
     build:
-      context: ./gateway-py
+      context: ./gateway-py     # Build context for Python MQTT gateway
       dockerfile: Dockerfile
-    network_mode: host
-    restart: unless-stopped
+    network_mode: host          # Use host network for direct MQTT access
+    restart: unless-stopped     # Automatically restart unless explicitly stopped
     depends_on:
-      - qr-c
+      - qr-c                    # Ensure qr-c container starts before gateway
+
