@@ -15,26 +15,19 @@ services:
       SERIAL_BAUD: "115200"          # Baud rate for serial communication
       READ_TIMEOUT_MS: "10000"       # Read timeout in milliseconds
     entrypoint: /bin/sh
-    command: |
-      # Install socat for virtual serial ports
-      apk add --no-cache socat
-      
-      # Create logs directory with full permissions
-      mkdir -p /app/logs
-      chmod 777 /app/logs
-      
-      # Create fake serial port pairs
-      socat -d -d pty,raw,echo=0,link=/dev/ttyS1 pty,raw,echo=0,link=/dev/ttyS2 &
-      socat -d -d pty,raw,echo=0,link=/dev/ttyQR1 pty,raw,echo=0,link=/dev/ttyQR2 &
-      
-      # Give socat time to initialize
-      sleep 2
-      
-      # Ensure read/write permissions for serial devices
-      chmod 666 /dev/ttyS1 /dev/ttyS2 /dev/ttyQR1 /dev/ttyQR2
-      
-      # Start QR C application and pipe output to Python processor
-      /app/qr_serial < /dev/ttyS1 | python3 process.py
+    command: >
+      -c "apk add --no-cache socat &&
+          mkdir -p /app/logs &&
+          chmod 777 /app/logs &&
+          socat -d -d pty,raw,echo=0,link=/dev/ttyS1 pty,raw,echo=0,link=/dev/ttyS2 &
+          socat -d -d pty,raw,echo=0,link=/dev/ttyQR1 pty,raw,echo=0,link=/dev/ttyQR2 &
+          sleep 3 &&
+          test -e /dev/ttyS1 || ln -s /dev/pts/0 /dev/ttyS1 &&
+          test -e /dev/ttyS2 || ln -s /dev/pts/1 /dev/ttyS2 &&
+          test -e /dev/ttyQR1 || ln -s /dev/pts/2 /dev/ttyQR1 &&
+          test -e /dev/ttyQR2 || ln -s /dev/pts/3 /dev/ttyQR2 &&
+          chmod 666 /dev/ttyS1 /dev/ttyS2 /dev/ttyQR1 /dev/ttyQR2 &&
+          /app/qr_serial < /dev/ttyS1 | python3 process.py"
 
 
   gateway:
@@ -47,4 +40,3 @@ services:
     restart: unless-stopped     # Automatically restart unless explicitly stopped
     depends_on:
       - qr-c                    # Ensure qr-c container starts before gateway
-
