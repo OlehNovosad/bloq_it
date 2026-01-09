@@ -13,7 +13,7 @@
 #include <time.h>
 #endif
 
-#include "qr.h"
+#include "qr_core.h"
 
 /* ---------------------------------------------------------
  * STATIC STATE

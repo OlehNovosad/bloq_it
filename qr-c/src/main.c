@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "qr.h"
+#include "qr_core.h"
 
 /* ---------------------------------------------------------
  * PRIVATE FUNCTIONS

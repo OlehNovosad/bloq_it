@@ -1,7 +1,7 @@
 #include <time.h>
 #include <stdio.h>
 
-#include "qr.h"
+#include "qr_core.h"
 
 /**
  * @brief Writes a timestamped log message to the application log file.
