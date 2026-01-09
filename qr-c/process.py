@@ -69,6 +69,8 @@ class MQTTClientManager:
         self.serial_conn = None
         self.qr_sim_conn = None
 
+        self.stop_event = threading.Event()
+
         self.client = mqtt_client.Client(
             mqtt_client.CallbackAPIVersion.VERSION2,
             client_id=self.client_id,
@@ -120,19 +122,30 @@ class MQTTClientManager:
             self.serial_conn.write(f"{command}\n".encode())
             self.serial_conn.flush()
 
-            if command == "START":
-                """
-                Simulate a QR scan after a delay when START command is received.
-                To be able to send STOP command before the simulated scan,
-                the simulation is run in a separate thread.
-                
-                Ensure that READ_TIMEOUT_MS from env is longer than this delay. 
-                Recommended to set READ_TIMEOUT_MS to at least 10000 ms.
-                """
-                sleep(5)
-                self.__simulate_qr_scan("SIMULATED_QR_12345")
+            match command:
+                case "START":
+                    """
+                    Simulate a QR scan after a delay when START command is received.
+                    To be able to send STOP command before the simulated scan,
+                    the simulation is run in a separate thread.
+                    
+                    Ensure that READ_TIMEOUT_MS from env is longer than this delay. 
+                    Recommended to set READ_TIMEOUT_MS to at least 10000 ms.
+                    """
+                    self.stop_event.clear()
+                    threading.Thread(target=self.__simulate_qr_scan, args=("SIMULATED_QR_CODE_123456",),
+                                     daemon=True).start()
+                case "STOP":
+                    logging.info("STOP command received; no QR scan will be simulated.")
+                    self.stop_event.set()
+                    # if self.qr_sim_conn and self.qr_sim_conn.is_open:
+                    #     self.qr_sim_conn.write(b"!\n")  # send stop signal
+                    #     self.qr_sim_conn.flush()
 
-    def __simulate_qr_scan(self, data: str, delay: float = 0.5):
+                case _:
+                    pass
+
+    def __simulate_qr_scan(self, data: str, delay: float = 5.0):
         """
         Simulates a QR scan by writing data to the QR simulator serial port.
 
@@ -140,14 +153,16 @@ class MQTTClientManager:
         :param delay: Delay before sending the simulated scan (seconds)
         """
 
-        def _send():
-            time.sleep(delay)
-            if self.qr_sim_conn and self.qr_sim_conn.is_open:
-                self.qr_sim_conn.write(f"{data}\n".encode())
-                self.qr_sim_conn.flush()
-                logging.info(f"Simulated QR scan: {data}")
+        stop_early = self.stop_event.wait(timeout=delay)
 
-        threading.Thread(target=_send, daemon=True).start()
+        if stop_early:
+            logging.info(f"QR scan simulation stopped at {stop_early}")
+            return
+
+        if self.qr_sim_conn and self.qr_sim_conn.is_open:
+            self.qr_sim_conn.write(f"{data}\n".encode())
+            self.qr_sim_conn.flush()
+            logging.info(f"Simulated QR scan: {data}")
 
     def __connect_serial(self):
         """
