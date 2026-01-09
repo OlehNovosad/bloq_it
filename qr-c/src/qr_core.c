@@ -30,12 +30,12 @@
  */
 static struct
 {
-    const char* port;       /**< Serial device path (e.g. /dev/ttyS1) */
-    int baud;               /**< Serial baud rate */
-    int timeout_ms;         /**< Read timeout in milliseconds */
-    int serial_fd;          /**< Open serial port file descriptor */
-    int stop_pipe[2];       /**< Pipe used to interrupt blocking reads */
-    state_t state;          /**< Current device state */
+    const char* port; /**< Serial device path (e.g. /dev/ttyS1) */
+    int baud; /**< Serial baud rate */
+    int timeout_ms; /**< Read timeout in milliseconds */
+    int serial_fd; /**< Open serial port file descriptor */
+    int stop_pipe[2]; /**< Pipe used to interrupt blocking reads */
+    state_t state; /**< Current device state */
 } g_ctx = {.serial_fd = -1, .stop_pipe = {-1, -1}, .state = STATE_BOOT};
 
 /* ---------------------------------------------------------
