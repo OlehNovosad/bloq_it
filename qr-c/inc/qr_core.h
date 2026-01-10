@@ -41,12 +41,16 @@ typedef enum
  * STATE_BOOT     - Initial startup state
  * STATE_READY    - Initialized and ready to read
  * STATE_READING  - Actively reading QR data
+ * STATE_ERROR    - Error state, requires re-initialization
+ * STATE_UNKNOWN  - Undefined state
  */
 typedef enum
 {
     STATE_BOOT = 0,
     STATE_READY,
     STATE_READING,
+    STATE_ERROR,
+    STATE_UNKNOWN,
 } state_t;
 
 /* ---------------------------------------------------------
