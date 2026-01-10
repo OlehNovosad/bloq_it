@@ -11,7 +11,7 @@ services:
     user: root              # Run as root to access /dev/tty* devices
     restart: unless-stopped # Automatically restart unless explicitly stopped
     environment:
-      SERIAL_PORT: /dev/ttyQR1       # Serial port used by QR app
+      SERIAL_PORT: /dev/ttyS1        # Serial port used by QR app
       SERIAL_BAUD: "115200"          # Baud rate for serial communication
       READ_TIMEOUT_MS: "10000"       # Read timeout in milliseconds
     entrypoint: /bin/sh
@@ -19,15 +19,13 @@ services:
       -c "apk add --no-cache socat &&
           mkdir -p /app/logs &&
           chmod 777 /app/logs &&
+          mkfifo /tmp/cmd_pipe &&
           socat -d -d pty,raw,echo=0,link=/dev/ttyS1 pty,raw,echo=0,link=/dev/ttyS2 &
-          socat -d -d pty,raw,echo=0,link=/dev/ttyQR1 pty,raw,echo=0,link=/dev/ttyQR2 &
           sleep 3 &&
           test -e /dev/ttyS1 || ln -s /dev/pts/0 /dev/ttyS1 &&
           test -e /dev/ttyS2 || ln -s /dev/pts/1 /dev/ttyS2 &&
-          test -e /dev/ttyQR1 || ln -s /dev/pts/2 /dev/ttyQR1 &&
-          test -e /dev/ttyQR2 || ln -s /dev/pts/3 /dev/ttyQR2 &&
-          chmod 666 /dev/ttyS1 /dev/ttyS2 /dev/ttyQR1 /dev/ttyQR2 &&
-          /app/qr_serial < /dev/ttyS1 | python3 process.py"
+          chmod 666 /dev/ttyS1 /dev/ttyS2 &&
+          /app/qr_serial < /tmp/cmd_pipe | python3 process.py"
 
 
   gateway:

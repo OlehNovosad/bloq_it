@@ -2,10 +2,8 @@ import json
 import logging
 import sys
 import threading
-import time
 import ssl
 from pathlib import Path
-from time import sleep
 
 import serial
 from paho.mqtt import client as mqtt_client
@@ -50,23 +48,23 @@ class MQTTClientManager:
             self,
             broker: str = "test.mosquitto.org",
             port: int = 1883,
-            serial_port: str = "/dev/ttyS2",
-            qr_sim_port: str = "/dev/ttyQR2",
+            cmd_pipe: str = "/tmp/cmd_pipe",
+            qr_sim_port: str = "/dev/ttyS2",
     ):
         """
         Initialize the MQTT client manager.
 
         :param broker: MQTT broker hostname
         :param port: MQTT broker port
-        :param serial_port: Serial port connected to the QR C application
+        :param cmd_pipe: Named pipe (FIFO) for sending commands to C app
         :param qr_sim_port: Serial port used to simulate QR scans
         """
         self.broker = broker
         self.port = port
         self.client_id = "qr-c_process"
-        self.serial_port = serial_port
+        self.cmd_pipe = cmd_pipe
         self.qr_sim_port = qr_sim_port
-        self.serial_conn = None
+        self.cmd_pipe_fd = None
         self.qr_sim_conn = None
 
         self.stop_event = threading.Event()
@@ -76,7 +74,7 @@ class MQTTClientManager:
             client_id=self.client_id,
         )
 
-        """ 
+        """
         Uncomment to enable TLS/SSL (broker port must match)
         Currently disabled for testing with public broker
         """
@@ -113,14 +111,14 @@ class MQTTClientManager:
         """
         MQTT callback executed when a message is received.
 
-        Forwards received commands to the QR device via serial.
+        Forwards received commands to the QR device via named pipe.
         """
         command = msg.payload.decode()
         logging.info(f"Received `{command}` from `{msg.topic}` topic")
 
-        if self.serial_conn and self.serial_conn.is_open:
-            self.serial_conn.write(f"{command}\n".encode())
-            self.serial_conn.flush()
+        if self.cmd_pipe_fd:
+            self.cmd_pipe_fd.write(f"{command}\n")
+            self.cmd_pipe_fd.flush()
 
             match command:
                 case "START":
@@ -128,8 +126,8 @@ class MQTTClientManager:
                     Simulate a QR scan after a delay when START command is received.
                     To be able to send STOP command before the simulated scan,
                     the simulation is run in a separate thread.
-                    
-                    Ensure that READ_TIMEOUT_MS from env is longer than this delay. 
+
+                    Ensure that READ_TIMEOUT_MS from env is longer than this delay.
                     Recommended to set READ_TIMEOUT_MS to at least 10000 ms.
                     """
                     self.stop_event.clear()
@@ -138,10 +136,6 @@ class MQTTClientManager:
                 case "STOP":
                     logging.info("STOP command received; no QR scan will be simulated.")
                     self.stop_event.set()
-                    # if self.qr_sim_conn and self.qr_sim_conn.is_open:
-                    #     self.qr_sim_conn.write(b"!\n")  # send stop signal
-                    #     self.qr_sim_conn.flush()
-
                 case _:
                     pass
 
@@ -166,12 +160,10 @@ class MQTTClientManager:
 
     def __connect_serial(self):
         """
-        Opens serial connections for both the QR device and QR simulator.
+        Opens the command pipe and QR simulator serial connection.
         """
-        self.serial_conn = serial.Serial(
-            self.serial_port, baudrate=115200, timeout=1
-        )
-        logging.info(f"Serial port {self.serial_port} opened")
+        self.cmd_pipe_fd = open(self.cmd_pipe, 'w')
+        logging.info(f"Command pipe {self.cmd_pipe} opened")
 
         self.qr_sim_conn = serial.Serial(
             self.qr_sim_port, baudrate=115200, timeout=1
@@ -192,12 +184,12 @@ class MQTTClientManager:
 
     def disconnect(self):
         """
-        Closes MQTT and serial connections.
+        Closes MQTT, pipe, and serial connections.
         """
         self.client.loop_stop()
         self.client.disconnect()
-        if self.serial_conn:
-            self.serial_conn.close()
+        if self.cmd_pipe_fd:
+            self.cmd_pipe_fd.close()
         if self.qr_sim_conn:
             self.qr_sim_conn.close()
         logging.info("Connections closed.")

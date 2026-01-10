@@ -1,9 +1,9 @@
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
-#include <errno.h>
 
 #ifdef __linux__
 #include <sys/select.h>
@@ -127,11 +127,28 @@ static result_t open_serial()
  */
 void qr_handle_init(void)
 {
-    if (g_ctx.state != STATE_BOOT)
+    if (g_ctx.state == STATE_READY || g_ctx.state == STATE_READING)
     {
         LOG_ERR("Already initialized");
         fflush(stdout);
         return;
+    }
+
+    // Close existing resources if re-initializing from error state
+    if (g_ctx.state == STATE_ERROR)
+    {
+        if (g_ctx.serial_fd >= 0)
+        {
+            close(g_ctx.serial_fd);
+            g_ctx.serial_fd = -1;
+        }
+        if (g_ctx.stop_pipe[0] >= 0)
+        {
+            close(g_ctx.stop_pipe[0]);
+            close(g_ctx.stop_pipe[1]);
+            g_ctx.stop_pipe[0] = -1;
+            g_ctx.stop_pipe[1] = -1;
+        }
     }
 
     g_ctx.port = getenv("SERIAL_PORT");
@@ -170,6 +187,13 @@ void qr_handle_init(void)
  */
 void qr_handle_ping(void)
 {
+    if (g_ctx.state == STATE_BOOT || g_ctx.state == STATE_ERROR)
+    {
+        LOG_ERR("Not initialized");
+        g_ctx.state = STATE_ERROR;
+        fflush(stdout);
+        return;
+    }
     printf("PONG\n");
     fflush(stdout);
 }
@@ -211,7 +235,9 @@ void qr_handle_start(void)
         if (FD_ISSET(g_ctx.stop_pipe[0], &rfds))
         {
             char dummy;
-            while (read(g_ctx.stop_pipe[0], &dummy, 1) > 0);
+            while (read(g_ctx.stop_pipe[0], &dummy, 1) > 0)
+            {
+            }
             LOG_INFO("Scan aborted by STOP");
         }
         else if (FD_ISSET(g_ctx.serial_fd, &rfds))
