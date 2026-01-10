@@ -8,7 +8,7 @@ This document describes the architecture of the bloq_it QR Scanner IoT Gateway s
 
 ## High-Level Architecture
 
-![High Level Architecture](../images/High-Level_Architecture.png)
+![High Level Architecture](../images/high-level_architecture.png)
 
 ---
 
